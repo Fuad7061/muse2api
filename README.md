@@ -252,6 +252,17 @@ curl -X POST "http://localhost:18610/v1/images/generations" \
 
 ---
 
+## 👥 贡献者致谢 (Contributors)
+
+感谢以下开发者对 MUSE2API 的代码贡献与功能优化（按 PR 合入顺序排列）：
+
+- 🌟 **[@cpt-kenvie](https://github.com/cpt-kenvie)** (PR [#2](https://github.com/czg86389-hub/muse2api/pull/2)) —— 修复 Docker Compose 读取 `.env` 环境变量与示例配置覆盖问题
+- 🌟 **[@CarloCPP](https://github.com/CarloCPP)** (PR [#6](https://github.com/czg86389-hub/muse2api/pull/6)) —— 贡献 Tampermonkey 油猴一键导号脚本及已禁用账号自动保活配置
+
+欢迎大家提交 PR 与 Issue，共同把项目打磨得更强更好用！
+
+---
+
 ## 📄 开源许可证
 
 本项目基于 [MIT License](LICENSE) 开源发布。
