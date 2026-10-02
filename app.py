@@ -1806,7 +1806,8 @@ async def run_keepalive_all(force: bool = False) -> dict:
         skipped = []
 
         try:
-            accounts = [a for a in store.list_accounts() if a.get("enabled", True)]
+            include_disabled = getattr(CFG, "keepalive_disabled_accounts", False)
+            accounts = [a for a in store.list_accounts() if include_disabled or a.get("enabled", True)]
             for a in accounts:
                 aid = a["id"]
                 label = a.get("label", aid)
