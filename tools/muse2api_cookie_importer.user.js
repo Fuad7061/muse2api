@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         Muse2API Cookie 导入助手
-// @namespace    https://github.com/czg86389-hub/muse2api
+// @namespace    https://github.com/Fuad7061/muse2api
 // @version      1.1.0
 // @description  在 muse.ai 网页上一键导出并推送核心 Cookie 至 muse2api 账号池，支持现代化悬浮面板、状态指示与剪贴板备份
 // @author       MUSE2API Contributors

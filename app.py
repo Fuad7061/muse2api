@@ -114,17 +114,17 @@ async def _http_exc(request: Request, exc: HTTPException):
 async def _validation_exc(request: Request, exc: RequestValidationError):
     if request.url.path.startswith("/v1/"):
         return JSONResponse(status_code=422, content={"error": {
-            "message": "请求参数校验失败：" + str(exc.errors())[:400],
+            "message": "Request validation failed: " + str(exc.errors())[:400],
             "type": "invalid_request_error", "param": None, "code": 422}})
     return JSONResponse(status_code=422, content={"detail": exc.errors()})
 
 MODELS = [
     {"id": "muse-spark", "object": "model", "owned_by": "muse",
-     "description": "Muse Spark —— 文本 / 代码对话（网页免费额度，支持流式）"},
+     "description": "Muse Spark — Text and Code Chat (Streaming supported)"},
     {"id": "muse-image", "object": "model", "owned_by": "muse",
-     "description": "Muse Image —— 文生图 / 图像编辑（网页免费额度）"},
+     "description": "Muse Image — Text-to-Image and Image Editing"},
     {"id": "muse-video", "object": "model", "owned_by": "muse",
-     "description": "Muse Video —— 文生视频 / 图生视频（网页免费额度）"},
+     "description": "Muse Video — Text-to-Video and Image-to-Video"},
 ]
 
 # 下游（Codex / Cline / 各种客户端）习惯按 OpenAI、Anthropic 的名字传模型，
@@ -170,11 +170,11 @@ def auth(authorization: str | None = Header(default=None)):
     if not CFG.api_key:
         return True
     if not authorization or not authorization.lower().startswith("bearer "):
-        raise HTTPException(401, "缺少 Authorization: Bearer <key>")
+        raise HTTPException(401, "Missing Authorization: Bearer <key>")
     parts = authorization.split(None, 1)
     token = parts[1].strip() if len(parts) > 1 else ""
     if not token or token != CFG.api_key:
-        raise HTTPException(401, "API key 无效")
+        raise HTTPException(401, "Invalid API key")
     return True
 
 
@@ -759,7 +759,7 @@ def _run_generation_locked(prompt: str, kind: str, timeout: int,
     if not acc:
         acc = store.pick_account(rotate=True, preferred_id=getattr(engine, "current_acc_id", None))
     if not acc:
-        raise MuseAuthError("没有可用账号，请先在管理页面导入 cookie")
+        raise MuseAuthError("No available accounts. Please add accounts with cookies in the dashboard.")
 
     last_exc = None
     cur_acc = acc
@@ -912,7 +912,7 @@ def create_image_task(req: ImageRequest,
 def get_image_task(task_id: str, _=Depends(auth)):
     task = store.get_task(task_id)
     if not task or task.get("kind") != "image":
-        raise HTTPException(404, "image task 不存在")
+        raise HTTPException(404, "Image task not found")
     out = dict(task)
     if out.get("status") == "completed":
         req = ImageRequest(prompt=out["prompt"], size=out.get("size"),
@@ -1075,7 +1075,7 @@ async def create_video(req: VideoRequest, _=Depends(auth)):
 def get_video(task_id: str, _=Depends(auth)):
     t = store.get_task(task_id)
     if not t:
-        raise HTTPException(404, "task 不存在")
+        raise HTTPException(404, "Task not found")
     out = dict(t)
     status = out.get("status")
     if status in ("succeeded", "success", "done"):
@@ -1155,7 +1155,7 @@ async def chat_completions(req: ChatRequest, _=Depends(auth)):
     """
     prompt = build_chat_prompt(req.messages) or (req.prompt or "").strip()
     if not prompt:
-        raise HTTPException(400, "messages 为空")
+        raise HTTPException(400, "Messages list is empty")
 
     # 工具调用协议默认不注入 —— 实测 muse.ai 的助手会明确拒绝输出"伪工具调用"，
     # 注入反而污染正常回答；详见 config.py 的 tool_protocol 注释。
@@ -1169,7 +1169,7 @@ async def chat_completions(req: ChatRequest, _=Depends(auth)):
     timeout = int(req.timeout or CFG.chat_timeout)
     acc = store.pick_account(rotate=True, preferred_id=getattr(engine, "current_acc_id", None))
     if not acc:
-        raise HTTPException(400, "没有可用账号，请先在管理页面导入 cookie")
+        raise HTTPException(400, "No available accounts. Please add accounts with cookies in the dashboard.")
 
     cid = "chatcmpl-" + uuid.uuid4().hex[:24]
     created = int(time.time())
@@ -1250,7 +1250,7 @@ async def chat_completions(req: ChatRequest, _=Depends(auth)):
                     pass
                 yield _sse({"error": {"message": str(exc), "type": "server_error", "code": 502}})
             except Exception as exc:
-                yield _sse({"error": {"message": f"内部错误: {exc}", "type": "server_error", "code": 500}})
+                yield _sse({"error": {"message": f"Internal server error: {exc}", "type": "server_error", "code": 500}})
         return StreamingResponse(sync_stream(), media_type="text/event-stream", headers=_SSE_HEADERS)
 
     def run() -> str:
@@ -1325,13 +1325,13 @@ async def responses_api(req: ResponsesRequest, _=Depends(auth)):
     """
     prompt = build_chat_prompt(_responses_messages(req))
     if not prompt:
-        raise HTTPException(400, "input 为空")
+        raise HTTPException(400, "Input is empty")
 
     model = resolve_model(req.model, default="muse-spark")
     timeout = int(req.timeout or CFG.chat_timeout)
     acc = store.pick_account(rotate=True, preferred_id=getattr(engine, "current_acc_id", None))
     if not acc:
-        raise HTTPException(400, "没有可用账号，请先在管理页面导入 cookie")
+        raise HTTPException(400, "No available accounts. Please add accounts with cookies in the dashboard.")
 
     rid = "resp_" + uuid.uuid4().hex[:24]
     mid = "msg_" + uuid.uuid4().hex[:24]
@@ -1405,10 +1405,10 @@ async def responses_api(req: ResponsesRequest, _=Depends(auth)):
 @app.get("/v1/media/{name}")
 def get_media(name: str):
     if "/" in name or "\\" in name or ".." in name:
-        raise HTTPException(400, "非法文件名")
+        raise HTTPException(400, "Invalid filename")
     p = os.path.join(CFG.media_dir, name)
     if not os.path.isfile(p):
-        raise HTTPException(404, "文件不存在")
+        raise HTTPException(404, "File not found")
     return FileResponse(p)
 
 
@@ -1557,7 +1557,7 @@ def add_account(req: AccountRequest, _=Depends(auth)):
                       "expires_at": acc.get("expires_at")})
 
     if not added:
-        raise HTTPException(400, "未解析到任何 cookie，请检查格式")
+        raise HTTPException(400, "No cookies parsed, please check the format")
 
     # 只要有一个账号把核心 cookie 凑齐就算通过（批量时按整体判断）
     missing = [n for n in ESSENTIAL_COOKIES
@@ -1572,7 +1572,7 @@ def add_account(req: AccountRequest, _=Depends(auth)):
 def patch_account(aid: str, req: AccountPatch, _=Depends(auth)):
     acc = store.update_account(aid, label=req.label, enabled=req.enabled)
     if not acc:
-        raise HTTPException(404, "账号不存在")
+        raise HTTPException(404, "Account not found")
     return {k: v for k, v in acc.items() if k != "cookies"} | {
         "cookie_count": len(acc.get("cookies", {}))}
 
@@ -1581,7 +1581,7 @@ def patch_account(aid: str, req: AccountPatch, _=Depends(auth)):
 def del_account(aid: str, _=Depends(auth)):
     ok = store.delete_account(aid)
     if not ok:
-        raise HTTPException(404, "账号不存在")
+        raise HTTPException(404, "Account not found")
     return {"deleted": True, "id": aid}
 
 
@@ -1590,9 +1590,9 @@ async def test_account(aid: str, _=Depends(auth)):
     """真实打开 muse.ai 验证该账号 cookie 是否仍可登录。"""
     acc = store.get_account(aid)
     if not acc:
-        raise HTTPException(404, "账号不存在")
+        raise HTTPException(404, "Account not found")
     if not acc.get("cookies"):
-        raise HTTPException(400, "该账号没有 cookie")
+        raise HTTPException(400, "Account has no cookies")
 
     def _probe():
         with GEN_LOCK:
@@ -1609,7 +1609,7 @@ async def test_account(aid: str, _=Depends(auth)):
                 except Exception:  # noqa: BLE001
                     quota = None
                 store.mark(aid, True, "会话有效")
-                return {"ok": True, "message": "会话有效，可正常生成",
+                return {"ok": True, "message": "Session is active and valid",
                         "synced": synced, "quota": quota}
             except MuseAuthError as exc:
                 store.mark(aid, False, str(exc)[:200])
@@ -1636,7 +1636,7 @@ def update_cookies(aid: str, payload: dict = Body(...), _=Depends(auth)):
     if payload.get("cookie_header"):
         cookies.update(parse_cookie_text(payload["cookie_header"]))
     if not cookies:
-        raise HTTPException(400, "未解析到 cookie")
+        raise HTTPException(400, "No cookies found")
     exp = {k: int(v) for k, v in (payload.get("expires") or {}).items()
            if _pos(v)}
     # 补入的是「全新会话」的 cookie，有效期估算锚点必须重置到当下，
@@ -1646,7 +1646,7 @@ def update_cookies(aid: str, payload: dict = Body(...), _=Depends(auth)):
                                expiry_anchor=int(time.time()),
                                cookies_exp=exp or None)
     if not acc:
-        raise HTTPException(404, "账号不存在")
+        raise HTTPException(404, "Account not found")
     return {"ok": True, "id": aid, "cookie_count": len(cookies),
             "expires_at": acc.get("expires_at")}
 
@@ -1655,7 +1655,7 @@ def update_cookies(aid: str, payload: dict = Body(...), _=Depends(auth)):
 def relogin(_=Depends(auth)):
     acc = store.pick_account(rotate=True)
     if not acc:
-        raise HTTPException(400, "没有可用账号")
+        raise HTTPException(400, "No available accounts")
     try:
         engine.start()
         engine.refresh(acc["cookies"], acc.get("cookies_exp"))
@@ -1675,9 +1675,9 @@ async def query_quota(aid: str, _=Depends(auth)):
     """
     acc = store.get_account(aid)
     if not acc:
-        raise HTTPException(404, "账号不存在")
+        raise HTTPException(404, "Account not found")
     if not acc.get("cookies"):
-        raise HTTPException(400, "该账号没有 cookie")
+        raise HTTPException(400, "Account has no cookies")
 
     def _probe():
         with GEN_LOCK:
@@ -1695,7 +1695,7 @@ async def query_quota(aid: str, _=Depends(auth)):
     except MuseGenerationError as exc:
         raise HTTPException(502, str(exc)) from exc
     except Exception as exc:  # noqa: BLE001
-        raise HTTPException(502, f"额度查询失败: {exc}") from exc
+        raise HTTPException(502, f"Quota query failed: {exc}") from exc
 
 
 @app.post("/admin/quota")
@@ -1704,7 +1704,7 @@ async def query_any_quota(_=Depends(auth)):
     通常只有一人使用时够用；多账号时建议按账号查）。"""
     acc = store.pick_account(rotate=True)
     if not acc:
-        raise HTTPException(400, "没有可用账号")
+        raise HTTPException(400, "No available accounts")
     return await query_quota(acc["id"], _)
 
 
@@ -1731,7 +1731,7 @@ def rotate_apikey(_=Depends(auth)):
     CFG.api_key = new_key
     _persist_env("MUSE2API_KEY", new_key)
     return {"ok": True, "api_key": new_key, "previous": old,
-            "message": "已生成新 Key 并立即生效；旧 Key 已失效，请更新下游项目"}
+            "message": "New API key generated and activated; old key is revoked."}
 
 
 def _persist_env(key: str, value: str):
@@ -1761,7 +1761,7 @@ def cookie_helper(download: int = 0):
     """返回本机取 cookie 的助手脚本（进阶方式，需要装 Python）。"""
     p = os.path.join(BASE_DIR, "tools", "get_muse_cookie.py")
     if not os.path.isfile(p):
-        raise HTTPException(404, "助手脚本缺失")
+        raise HTTPException(404, "Helper script not found")
     headers = {}
     if download:
         headers["Content-Disposition"] = 'attachment; filename="get_muse_cookie.py"'
@@ -1776,7 +1776,7 @@ def extension_zip():
     """
     src = os.path.join(BASE_DIR, "extension")
     if not os.path.isdir(src):
-        raise HTTPException(404, "扩展目录缺失")
+        raise HTTPException(404, "Extension directory not found")
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
         for name in sorted(os.listdir(src)):
@@ -1797,7 +1797,7 @@ def extension_files():
     """列出扩展目录内容（前端展示用）。"""
     src = os.path.join(BASE_DIR, "extension")
     if not os.path.isdir(src):
-        raise HTTPException(404, "扩展目录缺失")
+        raise HTTPException(404, "Extension directory not found")
     return {"files": sorted(f for f in os.listdir(src)
                             if os.path.isfile(os.path.join(src, f)))}
 
@@ -1843,13 +1843,13 @@ def delete_media(payload: dict = Body(default={}), _=Depends(auth)):
     if isinstance(names, str):
         names = [names]
     if not isinstance(names, list):
-        raise HTTPException(400, "names 必须是文件名数组")
+        raise HTTPException(400, "names must be an array of filenames")
     d = CFG.media_dir
     removed = 0
     errors = []
     for name in names:
         if not isinstance(name, str) or "/" in name or "\\" in name or ".." in name:
-            errors.append(f"非法文件名: {name}")
+            errors.append(f"Invalid filename: {name}")
             continue
         p = os.path.join(d, name)
         if os.path.isfile(p):
@@ -1864,15 +1864,15 @@ def delete_media(payload: dict = Body(default={}), _=Depends(auth)):
 @app.delete("/admin/media/{name}")
 def delete_single_media(name: str, _=Depends(auth)):
     if "/" in name or "\\" in name or ".." in name:
-        raise HTTPException(400, "非法文件名")
+        raise HTTPException(400, "Invalid filename")
     p = os.path.join(CFG.media_dir, name)
     if not os.path.isfile(p):
-        raise HTTPException(404, "文件不存在")
+        raise HTTPException(404, "File not found")
     try:
         os.remove(p)
         return {"status": "ok", "deleted": name}
     except OSError as e:
-        raise HTTPException(500, f"删除失败: {e}")
+        raise HTTPException(500, f"Delete failed: {e}")
 
 
 # ------------------------- 前端页面 -------------------------
@@ -1914,7 +1914,7 @@ def _probe_account_sync(aid: str, check_quota: bool = False) -> dict:
     """通过 muse.ai/api/session 触发 Meta 网关签发新 hatch_vml (+48h) / hatch_sess (+30d) 并唤醒云端 VM。"""
     acc = store.get_account(aid)
     if not acc or not acc.get("cookies"):
-        return {"ok": False, "id": aid, "label": (acc or {}).get("label", aid), "error": "账号无有效 cookie"}
+        return {"ok": False, "id": aid, "label": (acc or {}).get("label", aid), "error": "Account has no valid cookies"}
     try:
         res = engine.renew_session_http(acc["cookies"], acc.get("cookies_exp"), wake_vm=True)
         store.update_account(
@@ -2048,7 +2048,7 @@ async def _keepalive_loop():
 async def trigger_keepalive_all(force: bool = True, _=Depends(auth)):
     """管理员手动触发一次全账号保活续期。"""
     if KEEPALIVE_STATE["running"]:
-        return {"status": "busy", "message": "保活任务正在执行中，请稍候"}
+        return {"status": "busy", "message": "Keepalive task is already running in background"}
     return await run_keepalive_all(force=force)
 
 
@@ -2065,7 +2065,7 @@ def get_keepalive_status(_=Depends(auth)):
 
 
 # ------------------------- 仓库实时更新检测、通知与一键在线升级 -------------------------
-REPO_URL = "https://github.com/czg86389-hub/muse2api"
+REPO_URL = "https://github.com/Fuad7061/muse2api"
 TRACKED_REPO_PATHS = [
     "app.py", "engine.py", "store.py", "cdp.py", "config.py",
     "admin.html", "README.md", "version.json", "requirements.txt",
@@ -2122,9 +2122,9 @@ def _git(args: list[str], timeout: int = 30):
 
 
 def _ensure_git_repo(token: str = ""):
-    """确保 BASE_DIR 已初始化为绑定 czg86389-hub/muse2api 的 Git 仓库。"""
+    """确保 BASE_DIR 已初始化为绑定 Fuad7061/muse2api 的 Git 仓库。"""
     git_dir = os.path.join(BASE_DIR, ".git")
-    remote_url = f"https://x-access-token:{token}@github.com/czg86389-hub/muse2api.git" if token else f"{REPO_URL}.git"
+    remote_url = f"https://x-access-token:{token}@github.com/Fuad7061/muse2api.git" if token else f"{REPO_URL}.git"
     if not os.path.isdir(git_dir):
         _git(["init", "-b", "main"])
         _git(["remote", "add", "origin", remote_url])
@@ -2132,12 +2132,12 @@ def _ensure_git_repo(token: str = ""):
         _git(["reset", "--mixed", "origin/main"])
     else:
         _git(["remote", "set-url", "origin", remote_url])
-    _git(["config", "user.name", "czg86389-hub"])
-    _git(["config", "user.email", "czg86389-hub@users.noreply.github.com"])
+    _git(["config", "user.name", "Fuad7061"])
+    _git(["config", "user.email", "fuad@users.noreply.github.com"])
 
 
 def _check_update_sync(force: bool = False) -> dict:
-    """检测 GitHub 官方仓库 (czg86389-hub/muse2api) 是否有新版本或新提交。
+    """检测 GitHub 官方仓库 (Fuad7061/muse2api) 是否有新版本或新提交。
     默认缓存 90 秒，防止频繁刷新触发 GitHub API 速率限制。"""
     now = time.time()
     if not force and _UPDATE_CACHE["data"] and (now - _UPDATE_CACHE["ts"]) < 90:
@@ -2174,7 +2174,7 @@ def _check_update_sync(force: bool = False) -> dict:
     highlights = list(local_ver_obj.get("highlights") or [])
     try:
         rv = requests.get(
-            f"https://raw.githubusercontent.com/czg86389-hub/muse2api/main/version.json?t={int(now)}",
+            f"https://raw.githubusercontent.com/Fuad7061/muse2api/main/version.json?t={int(now)}",
             timeout=6,
         )
         if rv.status_code == 200:
@@ -2193,7 +2193,7 @@ def _check_update_sync(force: bool = False) -> dict:
         if token:
             headers["Authorization"] = f"Bearer {token}"
         resp = requests.get(
-            "https://api.github.com/repos/czg86389-hub/muse2api/commits?sha=main&per_page=5",
+            "https://api.github.com/repos/Fuad7061/muse2api/commits?sha=main&per_page=5",
             headers=headers,
             timeout=6,
         )
@@ -2279,11 +2279,11 @@ def _upgrade_from_github_sync() -> dict:
 
     if not upgraded_via:
         resp = requests.get(
-            "https://codeload.github.com/czg86389-hub/muse2api/tar.gz/refs/heads/main",
+            "https://codeload.github.com/Fuad7061/muse2api/tar.gz/refs/heads/main",
             timeout=60,
         )
         if resp.status_code != 200:
-            raise HTTPException(502, f"下载 GitHub 更新包失败 (HTTP {resp.status_code})")
+            raise HTTPException(502, f"Failed to download GitHub update archive (HTTP {resp.status_code})")
         protected_files = {".env", "data/accounts.json", "data/tasks.json"}
         with tarfile.open(fileobj=io.BytesIO(resp.content), mode="r:gz") as tar:
             for member in tar.getmembers():
@@ -2318,7 +2318,7 @@ def _upgrade_from_github_sync() -> dict:
     return {
         "ok": True,
         "via": upgraded_via,
-        "message": f"已成功更新至最新版本 {status.get('remote_version')} ({status.get('remote_sha')})",
+        "message": f"Successfully updated to latest version {status.get('remote_version')} ({status.get('remote_sha')})",
         "status": status,
     }
 
@@ -2378,7 +2378,7 @@ async def admin_repo_push(payload: dict = Body(default={}), _=Depends(auth)):
         return {
             "ok": True,
             "committed": committed,
-            "message": "已成功提交并推送到 GitHub 仓库",
+            "message": "Successfully committed and pushed to GitHub repository",
             "status": status,
         }
 
@@ -2389,7 +2389,7 @@ async def admin_repo_push(payload: dict = Body(default={}), _=Depends(auth)):
 async def _startup():
     for task in list(store.tasks.values()):
         if task.get("kind") == "image" and task.get("status") in ("queued", "processing"):
-            store.update_task(task["id"], status="failed", error="服务重启中断了任务，请重新提交")
+            store.update_task(task["id"], status="failed", error="Task was interrupted by server restart, please resubmit")
     if not CFG.api_key:
         import secrets
         new_key = "m2a_" + secrets.token_hex(24)

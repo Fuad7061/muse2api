@@ -1,10 +1,12 @@
 {
-  "version": "1.5.4",
-  "updated_at": "2026-10-06",
-  "repo": "https://github.com/czg86389-hub/muse2api",
+  "version": "1.5.5",
+  "updated_at": "2026-10-07",
+  "repo": "https://github.com/Fuad7061/muse2api",
   "highlights": [
-    "媒体库新增文件批量选择、一键全选与按需删除功能，有效释放 VPS 磁盘存储空间",
-    "后端新增 POST /admin/media/delete 与 DELETE /admin/media/{name}，严格防范路径穿越安全风险",
-    "新增媒体管理自动化测试套件"
+    "Integrated TmpFiles.org cloud storage (48h retention) to eliminate VPS disk storage usage",
+    "Added automated background housekeeping for tasks, logs, and expired local media",
+    "Added dynamic Settings configuration panel in Dashboard to manage API keys, storage, and retention",
+    "Fixed Chromium CDP busy-wait CPU loop bug for 0% idle CPU usage",
+    "Fully localized UI and API responses into English"
   ]
 }
