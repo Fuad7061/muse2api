@@ -1,10 +1,10 @@
 {
-  "version": "1.5.3",
-  "updated_at": "2026-10-01",
+  "version": "1.5.4",
+  "updated_at": "2026-10-06",
   "repo": "https://github.com/czg86389-hub/muse2api",
   "highlights": [
-    "修复 HTTP 403、网络超时被误判为 Cookie 失效；保留上次已确认的账号状态",
-    "修复上游 5xx 和未分配会话被误报保活成功；保留完整 HTTP 诊断",
-    "保活不再凭空延长 Cookie 有效期；新增账号健康回归测试"
+    "媒体库新增文件批量选择、一键全选与按需删除功能，有效释放 VPS 磁盘存储空间",
+    "后端新增 POST /admin/media/delete 与 DELETE /admin/media/{name}，严格防范路径穿越安全风险",
+    "新增媒体管理自动化测试套件"
   ]
 }

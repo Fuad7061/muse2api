@@ -17,7 +17,7 @@ OpenAI 兼容:
   POST   /admin/accounts/{id}/relogin
   GET    /admin/tasks               （任务记录）
   DELETE /admin/tasks/{id}  |  POST /admin/tasks/clear
-  GET    /admin/media               （媒体库）
+  GET    /admin/media  |  POST /admin/media/delete  |  DELETE /admin/media/{name}
   GET    /admin/extension           （浏览器扩展 zip，用来取 cookie）
   GET    /admin/cookie-helper       （命令行取 cookie 脚本，进阶）
 """
@@ -57,7 +57,7 @@ if not log.handlers:
     log.addHandler(_h)
 
 CFG.ensure_dirs()
-app = FastAPI(title="muse2api", version="1.5.3")
+app = FastAPI(title="muse2api", version="1.5.4")
 
 # Cookie 助手脚本从 muse.ai 页面发起导入请求，需要放行该来源；
 # 浏览器扩展从 chrome-extension:// 发起，也一并放行。
@@ -1737,6 +1737,44 @@ def admin_media(_=Depends(auth)):
                           "kind": "video" if ext in (".mp4", ".webm", ".mov") else "image"})
     items.sort(key=lambda x: x["mtime"], reverse=True)
     return {"media": items, "count": len(items)}
+
+
+@app.post("/admin/media/delete")
+def delete_media(payload: dict = Body(default={}), _=Depends(auth)):
+    names = payload.get("names", [])
+    if isinstance(names, str):
+        names = [names]
+    if not isinstance(names, list):
+        raise HTTPException(400, "names 必须是文件名数组")
+    d = CFG.media_dir
+    removed = 0
+    errors = []
+    for name in names:
+        if not isinstance(name, str) or "/" in name or "\\" in name or ".." in name:
+            errors.append(f"非法文件名: {name}")
+            continue
+        p = os.path.join(d, name)
+        if os.path.isfile(p):
+            try:
+                os.remove(p)
+                removed += 1
+            except OSError as e:
+                errors.append(f"{name}: {str(e)}")
+    return {"removed": removed, "errors": errors}
+
+
+@app.delete("/admin/media/{name}")
+def delete_single_media(name: str, _=Depends(auth)):
+    if "/" in name or "\\" in name or ".." in name:
+        raise HTTPException(400, "非法文件名")
+    p = os.path.join(CFG.media_dir, name)
+    if not os.path.isfile(p):
+        raise HTTPException(404, "文件不存在")
+    try:
+        os.remove(p)
+        return {"status": "ok", "deleted": name}
+    except OSError as e:
+        raise HTTPException(500, f"删除失败: {e}")
 
 
 # ------------------------- 前端页面 -------------------------
