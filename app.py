@@ -2128,11 +2128,17 @@ def _check_update_sync(force: bool = False) -> dict:
         except OSError:
             pass
 
+    def _parse_v(v: str) -> tuple[int, ...]:
+        try:
+            return tuple(int(x) for x in re.findall(r"\d+", v))
+        except Exception:
+            return (0,)
+
     has_update = False
-    if remote_sha and local_sha and remote_sha != local_sha:
-        has_update = True
-    elif remote_version and local_version and remote_version != local_version:
-        has_update = True
+    if remote_sha and local_sha:
+        has_update = (remote_sha != local_sha)
+    elif remote_version and local_version:
+        has_update = _parse_v(remote_version) > _parse_v(local_version)
 
     data = {
         "repo_url": REPO_URL,
