@@ -102,6 +102,8 @@ class Config:
     image_timeout: int = field(default_factory=lambda: int(_env("MUSE2API_IMAGE_TIMEOUT", "240")))
     video_timeout: int = field(default_factory=lambda: int(_env("MUSE2API_VIDEO_TIMEOUT", "600")))
     chat_timeout: int = field(default_factory=lambda: int(_env("MUSE2API_CHAT_TIMEOUT", "300")))
+    media_storage: str = field(default_factory=lambda: _env("MUSE2API_MEDIA_STORAGE", "local"))
+    log_retention_days: int = field(default_factory=lambda: int(_env("MUSE2API_LOG_RETENTION_DAYS", "3")))
 
     # 工具调用（function calling）协议适配开关，**默认关闭**。
     # 实测 muse.ai 的助手会明确拒绝输出"伪工具调用"（原话：「我不会按这种 JSON

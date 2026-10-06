@@ -827,12 +827,16 @@ def models(_=Depends(auth)):
 
 # ------------------------- 生图 -------------------------
 def _image_response(req: ImageRequest, res: dict) -> dict:
-    item = {"revised_prompt": req.prompt, "url": media_url(res["filename"]),
+    url = res.get("url") or media_url(res["filename"])
+    item = {"revised_prompt": req.prompt, "url": url,
             "size": req.size or "auto", "kind": res["kind"], "bytes": res["size"]}
     if req.response_format == "b64_json":
-        fpath = res.get("path") or os.path.join(CFG.media_dir, res["filename"])
-        with open(fpath, "rb") as f:
-            item["b64_json"] = base64.b64encode(f.read()).decode()
+        if "data" in res:
+            item["b64_json"] = base64.b64encode(res["data"]).decode()
+        else:
+            fpath = res.get("path") or os.path.join(CFG.media_dir, res["filename"])
+            with open(fpath, "rb") as f:
+                item["b64_json"] = base64.b64encode(f.read()).decode()
         item.pop("url", None)
     return {"created": int(time.time()), "data": [item]}
 
@@ -879,9 +883,9 @@ def _queue_image(req: ImageRequest, prompt: str, reference_image: str | None,
             # Store only media metadata, not large base64 payloads or reference credentials.
             store.update_task(tid, status="completed", progress=100, account=acc_id,
                               elapsed=round(time.time() - t0, 1),
-                              url=media_url(res["filename"]),
+                              url=res.get("url") or media_url(res["filename"]),
                               result={**{k: res[k] for k in ("filename", "size", "kind")},
-                                      "url": media_url(res["filename"])})
+                                      "url": res.get("url") or media_url(res["filename"])})
         except Exception as exc:  # noqa: BLE001
             store.update_task(tid, status="failed", error=str(exc),
                               elapsed=round(time.time() - t0, 1))
@@ -1409,6 +1413,100 @@ def get_media(name: str):
 
 
 # ------------------------- 管理：总览 -------------------------
+
+def update_env(updates: dict):
+    base = os.environ.get("MUSE2API_HOME") or BASE_DIR
+    env_path = os.path.join(base, ".env")
+    lines = []
+    if os.path.isfile(env_path):
+        with open(env_path, "r", encoding="utf-8") as f:
+            lines = f.readlines()
+    
+    env_map = {}
+    for k, v in updates.items():
+        env_map[k] = str(v)
+        
+    new_lines = []
+    replaced = set()
+    for line in lines:
+        s = line.strip()
+        if not s or s.startswith("#") or "=" not in s:
+            new_lines.append(line)
+            continue
+        k = s.split("=", 1)[0].strip()
+        if k in env_map:
+            new_lines.append(f"{k}={env_map[k]}\n")
+            replaced.add(k)
+        else:
+            new_lines.append(line)
+            
+    for k, v in env_map.items():
+        if k not in replaced:
+            new_lines.append(f"{k}={v}\n")
+            
+    with open(env_path, "w", encoding="utf-8") as f:
+        f.writelines(new_lines)
+
+
+@app.get("/admin/settings")
+def get_settings(_=Depends(auth)):
+    return {
+        "media_storage": getattr(CFG, "media_storage", "local"),
+        "log_retention_days": getattr(CFG, "log_retention_days", 3),
+        "api_key": CFG.api_key,
+    }
+
+class SettingsUpdate(BaseModel):
+    media_storage: str = None
+    log_retention_days: int = None
+    api_key: str = None
+
+@app.post("/admin/settings")
+def update_settings(updates: SettingsUpdate, _=Depends(auth)):
+    upd = {}
+    if updates.media_storage is not None:
+        upd["MUSE2API_MEDIA_STORAGE"] = updates.media_storage
+        CFG.media_storage = updates.media_storage
+    if updates.log_retention_days is not None:
+        upd["MUSE2API_LOG_RETENTION_DAYS"] = updates.log_retention_days
+        CFG.log_retention_days = updates.log_retention_days
+    if updates.api_key is not None:
+        upd["MUSE2API_KEY"] = updates.api_key
+        CFG.api_key = updates.api_key
+        
+    update_env(upd)
+    return {"status": "success"}
+
+# Background cleaner
+def background_cleaner():
+    while True:
+        try:
+            days = getattr(CFG, "log_retention_days", 3)
+            cutoff = int(time.time()) - (days * 86400)
+            
+            # Clean old tasks
+            with store._LOCK:
+                to_delete = [tid for tid, t in store.tasks.items() if t.get("created_at", 0) < cutoff]
+                for tid in to_delete:
+                    del store.tasks[tid]
+                if to_delete:
+                    from store import _write
+                    _write(store.cfg.tasks_file, store.tasks)
+            
+            # Clean old media files
+            if os.path.isdir(CFG.media_dir):
+                for fname in os.listdir(CFG.media_dir):
+                    fpath = os.path.join(CFG.media_dir, fname)
+                    if os.path.isfile(fpath) and os.path.getmtime(fpath) < cutoff:
+                        os.unlink(fpath)
+        except Exception as e:
+            log.error(f"Cleaner error: {e}")
+            
+        time.sleep(3600)
+
+threading.Thread(target=background_cleaner, daemon=True).start()
+
+
 @app.get("/admin/status")
 def admin_status(_=Depends(auth)):
     base = _public_base()

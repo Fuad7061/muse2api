@@ -1163,6 +1163,21 @@ class MuseEngine:
         if data:
             ext = self._pick_ext(mime, url, expect)
             name = f"{uuid.uuid4().hex}{ext}"
+            if getattr(self.cfg, "media_storage", "local") == "tmpfiles":
+                import requests
+                try:
+                    resp = requests.post("https://tmpfiles.org/api/v1/upload", files={"file": (name, data)}, timeout=60).json()
+                    if resp.get("status") == "success":
+                        tmp_url = resp["data"]["url"]
+                        direct_url = tmp_url.replace("tmpfiles.org/", "tmpfiles.org/dl/")
+                        return {"path": None, "url": direct_url, "filename": name, "size": len(data), "ext": ext, "mime": mime,
+                                "kind": "video" if ext in (".mp4", ".webm", ".mov") else "image",
+                                "via": "tmpfiles", "attachment": att.get("tid"),
+                                "w": att.get("w"), "h": att.get("h"), "data": data}
+                except Exception as e:
+                    self._debug_dump(f"tmpfiles-upload-fail: {e}")
+                    # fallback to local
+
             dst = os.path.join(self.cfg.media_dir, name)
             with open(dst, "wb") as f:
                 f.write(data)
@@ -1176,6 +1191,25 @@ class MuseEngine:
             raise MuseGenerationError("已生成但未能取回文件")
         ext = os.path.splitext(path)[1].lower() or ".bin"
         name = f"{uuid.uuid4().hex}{ext}"
+        
+        if getattr(self.cfg, "media_storage", "local") == "tmpfiles":
+            import requests
+            try:
+                with open(path, "rb") as f:
+                    file_data = f.read()
+                resp = requests.post("https://tmpfiles.org/api/v1/upload", files={"file": (name, file_data)}, timeout=60).json()
+                if resp.get("status") == "success":
+                    tmp_url = resp["data"]["url"]
+                    direct_url = tmp_url.replace("tmpfiles.org/", "tmpfiles.org/dl/")
+                    os.unlink(path)
+                    return {"path": None, "url": direct_url, "filename": name, "size": len(file_data), "ext": ext, "mime": "",
+                            "kind": "video" if ext in (".mp4", ".webm", ".mov") else "image",
+                            "via": "tmpfiles", "attachment": att.get("tid"),
+                            "w": att.get("w"), "h": att.get("h"), "data": file_data}
+            except Exception as e:
+                self._debug_dump(f"tmpfiles-upload-fail: {e}")
+                # fallback to local
+
         dst = os.path.join(self.cfg.media_dir, name)
         shutil.move(path, dst)
         return {"path": dst, "filename": name, "size": os.path.getsize(dst), "ext": ext, "mime": "",

@@ -28,8 +28,8 @@ class CDP:
                 msg = json.loads(self.ws.recv())
             except websocket.WebSocketTimeoutException:
                 continue
-            except Exception:  # noqa: BLE001
-                continue
+            except Exception as e:
+                raise CDPError(f"WebSocket Error: {e}") from e
             if msg.get("id") == mid:
                 if "error" in msg:
                     raise CDPError(f"{method}: {msg['error']}")
@@ -52,8 +52,10 @@ class CDP:
         while time.time() < end:
             try:
                 ev = json.loads(self.ws.recv())
-            except Exception:  # noqa: BLE001
+            except websocket.WebSocketTimeoutException:
                 continue
+            except Exception:  # noqa: BLE001
+                break
             if on_event and "method" in ev:
                 on_event(ev)
 
