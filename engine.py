@@ -48,13 +48,30 @@ class MuseEngine:
         self.current_acc_id: str | None = None
         self._last_http_renew: dict[str, float] = {}
         self._log = None
+        self.last_active: float = time.time()
+        self._idle_thread = None
         os.makedirs(cfg.profile_dir, exist_ok=True)
+
+    def _idle_monitor(self):
+        import time
+        while True:
+            time.sleep(30)
+            if self.proc and self.proc.poll() is None:
+                if time.time() - self.last_active > 300:
+                    import logging
+                    logging.getLogger("muse2api").info("【引擎管家】浏览器处于空闲状态超过 5 分钟，自动关闭以释放 CPU 资源")
+                    self.stop()
 
     # ---------------- 浏览器生命周期 ----------------
     def _debug_url(self):
         return f"http://127.0.0.1:{self.cfg.cdp_port}/json/version"
 
     def start(self):
+        self.last_active = time.time()
+        if self._idle_thread is None:
+            import threading
+            self._idle_thread = threading.Thread(target=self._idle_monitor, daemon=True)
+            self._idle_thread.start()
         if self.proc and self.proc.poll() is None and self.browser:
             return
         env = dict(os.environ)
@@ -328,6 +345,7 @@ class MuseEngine:
             pass
 
     def ensure_page(self, cookies: dict, expires: dict | None = None, account_id: str | None = None):
+        self.last_active = time.time()
         if self.page is not None and (account_id is None or getattr(self, "current_acc_id", None) == account_id):
             try:
                 if self.page.js("!!document.querySelector('textarea')"):
@@ -421,6 +439,7 @@ class MuseEngine:
 
     def quota(self, cookies: dict, expires: dict | None = None) -> dict:
         """打开 Settings 面板读额度。返回结构化 dict；读不到时 raise。"""
+        self.last_active = time.time()
         self.ensure_page(cookies, expires)
         p = self.page
         time.sleep(1)
@@ -868,6 +887,7 @@ class MuseEngine:
     def chat_stream(self, cookies: dict, prompt: str, expires: dict | None = None,
                     timeout: int | None = None, account_id: str | None = None,
                     stop_event=None):
+        self.last_active = time.time()
         """发一条消息，流式 yield 增量文本。"""
         timeout = int(timeout or getattr(self.cfg, "chat_timeout", 300))
         self.ensure_page(cookies, expires, account_id=account_id)
@@ -1129,6 +1149,7 @@ class MuseEngine:
                  timeout: int = 240, expires: dict | None = None, account_id: str | None = None,
                  on_progress=None, reference_image: str | None = None,
                  stop_event=None) -> dict:
+        self.last_active = time.time()
         self.ensure_page(cookies, expires, account_id=account_id)
         self.reset_thread(for_chat=False)
         self._scroll_bottom()

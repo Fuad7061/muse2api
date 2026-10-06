@@ -2030,15 +2030,15 @@ async def _keepalive_loop():
     """后台常驻守护任务：每 15 分钟轮询一次账号健康状态并保持 VM 热备。"""
     log.info("【自动保活守护进程】已启动，检测周期: 15 分钟")
     await asyncio.sleep(1)
-    try:
-        await asyncio.to_thread(_warmup_browser_sync)
-    except Exception as e:  # noqa: BLE001
-        log.warning("【浏览器预热】异常: %s", e)
+    # try:
+    #     await asyncio.to_thread(_warmup_browser_sync)
+    # except Exception as e:  # noqa: BLE001
+    #     log.warning("【浏览器预热】异常: %s", e)
     while True:
         try:
             await run_keepalive_all(force=False)
-            if not getattr(engine, "current_acc_id", None) or engine.page is None:
-                await asyncio.to_thread(_warmup_browser_sync)
+            # if not getattr(engine, "current_acc_id", None) or engine.page is None:
+            #     await asyncio.to_thread(_warmup_browser_sync)
         except Exception as e:  # noqa: BLE001
             log.error("【自动保活守护进程】轮询异常: %s", e)
         await asyncio.sleep(900)
