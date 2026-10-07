@@ -10,7 +10,7 @@ import uuid
 
 _LOCK = threading.Lock()
 
-# 决定账号生死的核心 cookie（与 engine.ESSENTIAL_COOKIES 保持一致）
+# 决定账号生死的核心 cookie（与 core_engine.ESSENTIAL_COOKIES 保持一致）
 ESSENTIAL_COOKIES = ("hatch_sess", "hatch_gw", "hatch_vml",
                      "hatch_native_auth_device")
 
@@ -95,6 +95,8 @@ def _write(path: str, obj):
 
 
 class Store:
+    _LOCK = _LOCK
+
     def __init__(self, cfg):
         self.cfg = cfg
         self.accounts: list[dict] = _read(cfg.accounts_file, [])

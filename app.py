@@ -45,7 +45,7 @@ from fastapi.responses import (FileResponse, HTMLResponse, JSONResponse,
 from pydantic import BaseModel, Field
 
 from config import CFG
-from engine import ESSENTIAL_COOKIES, MuseAuthError, MuseEngine, MuseGenerationError
+from core_engine import ESSENTIAL_COOKIES, MuseAuthError, MuseEngine, MuseGenerationError
 from store import Store, account_expiry, min_expiry
 
 import sys
@@ -2067,7 +2067,7 @@ def get_keepalive_status(_=Depends(auth)):
 # ------------------------- 仓库实时更新检测、通知与一键在线升级 -------------------------
 REPO_URL = "https://github.com/Fuad7061/muse2api"
 TRACKED_REPO_PATHS = [
-    "app.py", "engine.py", "store.py", "cdp.py", "config.py",
+    "app.py", "core_engine.py", "store.py", "cdp.py", "config.py",
     "admin.html", "README.md", "version.json", "requirements.txt",
     "Dockerfile", "docker-compose.yml", ".env.example", ".gitignore",
     "LICENSE", "extension", "deploy", "tools",

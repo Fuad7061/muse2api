@@ -19,7 +19,7 @@ HERE = __file__.rsplit("/", 2)[0]
 sys.path.insert(0, HERE)
 
 from cdp import CDP, http_json  # noqa: E402
-import engine as E  # noqa: E402
+import core_engine as E  # noqa: E402
 
 CDP_PORT = 19210
 PNG_B64 = ("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmM"

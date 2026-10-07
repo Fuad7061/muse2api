@@ -69,7 +69,7 @@ async def check(source, home, public_base):
     os.environ.update(MUSE2API_HOME=home, MUSE2API_PROFILE_ROOT=home,
                       MUSE2API_KEY="test-only", MUSE2API_PUBLIC_BASE=public_base)
     sys.path.insert(0, str(source.parent))
-    for name in ("config", "store", "engine", "cdp"):
+    for name in ("config", "store", "core_engine", "cdp"):
         sys.modules.pop(name, None)          # config reads MUSE2API_* at import
     spec = importlib.util.spec_from_file_location("admin_base_url_test_target", source)
     module = importlib.util.module_from_spec(spec)
